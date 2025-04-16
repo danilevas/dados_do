@@ -5,6 +5,8 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import os
+import json
+import numpy as np
 
 # Configurar e iniciar o driver do Selenium
 def iniciar_driver():
@@ -53,6 +55,7 @@ def extrair_dados(data, html):
     cargos = []
     simbolos = []
     lotacoes = []
+    hierarquia = {}
     
     # Buscando todos os matches do padrão de nomeação
     for match in re.finditer(padrao_nomeacao, html):
@@ -60,18 +63,20 @@ def extrair_dados(data, html):
         
         # Limpar nome das tags HTML
         nome_limpo = BeautifulSoup(nome, "html.parser").get_text(separator=" ").strip()
-        nome_limpo = nome_limpo.replace("  ", " ")
+        while "  " in nome_limpo:
+            nome_limpo = nome_limpo.replace("  ", " ")
 
         # Encontrar o cargo logo após o nome
         parte_html_1 = html[match.end():]  # Captura tudo após o nome
-        cargo_match = re.search(r'cargo(?:[^,]*),', parte_html_1)  # Pega tudo entre "cargo" e a próxima vírgula
+        cargo_match = re.search(r'car-?(?:<[^>]*>)*go(?:[^,]*),', parte_html_1)  # Pega tudo entre "cargo" ou "car- go" e a próxima vírgula, ignorando tags HTML
 
         if cargo_match:
             cargo = cargo_match.group(0)
             cargo_limpo = BeautifulSoup(cargo, "html.parser").get_text(separator=" ").strip()
             de = re.search("de", cargo_limpo)
             cargo_limpo = cargo_limpo[de.end():-1].lstrip()
-            cargo_limpo = cargo_limpo.replace("  ", " ")
+            while "  " in cargo_limpo:
+                cargo_limpo = cargo_limpo.replace("  ", " ")
 
             # Tirar as instâncias de "- " que é simplesmente uma quebra de linha no meio da palavra,
             # sem tirar as instâncias de " - ", um hífen mesmo
@@ -102,7 +107,7 @@ def extrair_dados(data, html):
         if lotacao_match:
             lotacao = lotacao_match.group(1)  # Agora estamos pegando o texto entre as vírgulas
             lotacao_limpo = BeautifulSoup(lotacao, "html.parser").get_text(separator=" ").strip()
-            
+
             # A lotação vai até a palavra "anteriormente" ou "em vaga", vamos pegar o que vem antes disso
             anteriormente = re.search(anteriormente_regex, lotacao_limpo)
             em_vaga = re.search(em_vaga_regex, lotacao_limpo)
@@ -112,26 +117,30 @@ def extrair_dados(data, html):
             elif em_vaga:
                 lotacao_limpo = lotacao_limpo[:em_vaga.start()]
 
+            # Retirando o resto de html que às vezes sobra no início do texto
+            resto = re.search("/div>", lotacao_limpo)
+            if resto and resto.start() == 0:
+                lotacao_limpo = lotacao_limpo.replace("/div>", "")
+            
+            # Tirar os espaços no início do texto
+            lotacao_limpo = lotacao_limpo.lstrip()
+
             # Procurando pelo "do" ou "da" que sobra no início do texto e pegando só o que vem depois disso
             do = re.search("do", lotacao_limpo)
             da = re.search("da", lotacao_limpo)
             
-            if do and da:
-                if do.start() < da.start():
-                    lotacao_limpo = lotacao_limpo[do.end():]
-                else:
-                    lotacao_limpo = lotacao_limpo[da.end():]
-            elif do:
+            # Se tiver "do" ou "da" no início do texto, tira
+            if do and do.start() == 0:
                 lotacao_limpo = lotacao_limpo[do.end():]
-            elif da:
+            elif da and da.start() == 0:
                 lotacao_limpo = lotacao_limpo[da.end():]
+
+            # Tirar os espaços no início do texto de novo
+            lotacao_limpo = lotacao_limpo.lstrip()
 
             # Tira espaços e vírgulas do final
             while lotacao_limpo[-1] in [" ", ","]:
                 lotacao_limpo = lotacao_limpo[:-1]
-            
-            # Tirar os espaços no início do texto
-            lotacao_limpo = lotacao_limpo.lstrip()
 
             # Tirar os espaços duplos
             while "  " in lotacao_limpo:
@@ -140,6 +149,24 @@ def extrair_dados(data, html):
             # Tirar as instâncias de "- " que é simplesmente uma quebra de linha no meio da palavra,
             # sem tirar as instâncias de " - ", um hífen mesmo
             lotacao_limpo = re.sub(r'(?<! )- ', '', lotacao_limpo)
+
+            # # Divide a string nas vírgulas
+            # partes = lotacao_limpo.split(',')
+
+            # nivel = 1
+            # for parte in reversed(partes):
+            #     if parte not in hierarquia.keys():
+            #         hierarquia[parte] = []
+            #     nivel += 1
+
+            # virgula = re.search(",", lotacao_limpo)
+            # hifen = re.search(" - ", lotacao_limpo)
+
+            # # Quando o órgão com sigla é o de nível menor
+            # if hifen and virgula and hifen.start() < virgula.start():
+            #     orgao = lotacao_limpo[:hifen.start()].rstrip()
+            # elif hifen and virgula:
+            #     orgao =  orgao = lotacao_limpo[:virgula.start()].rstrip()
         
         else:
             lotacao_limpo = "Lotação não encontrada"
@@ -149,7 +176,7 @@ def extrair_dados(data, html):
         simbolos.append(simbolo_limpo)
         lotacoes.append(lotacao_limpo)
     
-    return nomeacoes, cargos, simbolos, lotacoes
+    return nomeacoes, cargos, simbolos, lotacoes, hierarquia
 
 # Salvar os dados em CSV
 def salvar_em_csv(data, nomeacoes, cargos, simbolos, lotacoes, nome_arquivo="csvs/dados.csv"):
@@ -167,6 +194,11 @@ def salvar_em_csv(data, nomeacoes, cargos, simbolos, lotacoes, nome_arquivo="csv
     df_final.to_csv(nome_arquivo, index=False, encoding="utf-8-sig")
     return df_final
 
+def salvar_hierarquia(hierarquia):
+    # Salvando a hierarquia como um JSON
+    with open('jsons/hierarquia_orgaos.json', 'w', encoding='utf-8') as f:
+        json.dump(hierarquia, f, ensure_ascii=False, indent=4)
+
 # Função principal (executa tudo)
 def executar_fluxo_completo(urls):
     # Deleta o arquivo com dados, se existir, para pegarmos dados novos
@@ -180,9 +212,10 @@ def executar_fluxo_completo(urls):
         print(f"Salvando html do DO do dia {data}")
         salvar_html(html, nome_arquivo=f"htmls/diario_oficial_{data}.html")
         print(f"Extraindo dados do DO do dia {data}")
-        nomes, cargos, simbolos, lotacoes = extrair_dados(data, html)
+        nomes, cargos, simbolos, lotacoes, hierarquia = extrair_dados(data, html)
         print(f"Salvando o CSV do DO do dia {data}")
         df = salvar_em_csv(data, nomes, cargos, simbolos, lotacoes)
+        salvar_hierarquia(hierarquia)
     
     return df
 
@@ -197,18 +230,80 @@ def executar_fluxo_um_dia(urls, data):
     print(f"Salvando html do DO do dia {data}")
     salvar_html(html, nome_arquivo=f"htmls/diario_oficial_{data}_teste.html")
     print(f"Extraindo dados do DO do dia {data}")
-    nomes, cargos, simbolos, lotacoes = extrair_dados(data, html)
+    nomes, cargos, simbolos, lotacoes, hierarquia = extrair_dados(data, html)
     print(f"Salvando o CSV do DO do dia {data}")
     df = salvar_em_csv(data, nomes, cargos, simbolos, lotacoes, nome_arquivo=f"csvs/dados_teste_{data}.csv")
+    salvar_hierarquia(hierarquia)
     return df
 
 def procurar_no_html_salvo(data):
     with open(f"htmls/diario_oficial_{data}.html", encoding="utf-8") as f:
         html_salvo = f.read()
     print(f"Extraindo dados do DO do dia {data}")
-    nomes, cargos, simbolos, lotacoes = extrair_dados(data, html_salvo)
+    nomes, cargos, simbolos, lotacoes, hierarquia = extrair_dados(data, html_salvo)
     print(f"Salvando o CSV do DO do dia {data}")
     df = salvar_em_csv(data, nomes, cargos, simbolos, lotacoes, nome_arquivo=f"csvs/dados_teste_{data}.csv")
+    salvar_hierarquia(hierarquia)
+    return df
+
+# Função principal (executa tudo)
+def procurar_nos_htmls_salvos(datas):
+    # Deleta o arquivo com dados, se existir, para pegarmos dados novos
+    if os.path.isfile("csvs/dados_htmls_copiados.csv"):
+        os.remove("csvs/dados_htmls_copiados.csv")
+
+    # Iterando pelos dias e os arquivos com os HTMLs dos DOs
+    for data in datas:
+        with open(f"htmls/copiados/diario_oficial_{data}.html", encoding="utf-8") as f:
+            html_salvo = f.read()
+        print(f"Extraindo dados do DO do dia {data}")
+        nomes, cargos, simbolos, lotacoes, hierarquia = extrair_dados(data, html_salvo)
+        print(f"Salvando o CSV do DO do dia {data}")
+        df = salvar_em_csv(data, nomes, cargos, simbolos, lotacoes, nome_arquivo=f"csvs/dados_htmls_copiados.csv")
+        salvar_hierarquia(hierarquia)
+    
+    return df
+
+def cria_dfs_agregados(df):
+    df_nomeacoes_por_dia = df.groupby('Data DO')['Nome'].count().reset_index(name='Quantidade Nomeações')
+    df_nomeacoes_por_dia.to_csv("csvs/agregados/nomeacoes_por_dia.csv", encoding="utf-8", index=False)
+
+    df_nomeacoes_por_cargo = df.groupby('Cargo')['Nome'].count().reset_index(name='Quantidade Nomeações')
+    df_nomeacoes_por_cargo = df_nomeacoes_por_cargo.sort_values(by='Quantidade Nomeações', ascending=False)
+    df_nomeacoes_por_cargo.to_csv("csvs/agregados/nomeacoes_por_cargo.csv", encoding="utf-8", index=False)
+    
+    df_nomeacoes_por_simbolo = df.groupby('Símbolo')['Nome'].count().reset_index(name='Quantidade Nomeações')
+    df_nomeacoes_por_simbolo = df_nomeacoes_por_simbolo.sort_values(by='Quantidade Nomeações', ascending=False)
+    df_nomeacoes_por_simbolo.to_csv("csvs/agregados/nomeacoes_por_simbolo.csv", encoding="utf-8", index=False)
+
+    df_nomeacoes_por_lotacao = df.groupby('Lotação')['Nome'].count().reset_index(name='Quantidade Nomeações')
+    df_nomeacoes_por_lotacao = df_nomeacoes_por_lotacao.sort_values(by='Quantidade Nomeações', ascending=False)
+    df_nomeacoes_por_lotacao.to_csv("csvs/agregados/nomeacoes_por_lotacao.csv", encoding="utf-8", index=False)
+
+def categorizar_para_df(lista):
+    # Vê qual o maior número de subdivisões
+    max_n_virgulas = 0
+    for item in lista:
+        n_virgulas = item.count(",")
+        if n_virgulas > max_n_virgulas:
+            max_n_virgulas = n_virgulas
+
+    # Criar um DataFrame vazio com x colunas
+    colunas = [f'Nível {i+1}' for i in range(max_n_virgulas+1)]
+    df = pd.DataFrame(columns=colunas)
+
+    for item in lista:
+        # Divide e limpa os nomes dos órgãos
+        partes = [p.strip() for p in item.split(',')]
+        partes = [parte[3:] if parte[0:3] in ["na ", "no ", "da ", "do "] else parte for parte in partes]
+
+        while len(partes) < max_n_virgulas+1:
+            partes.insert(0, np.nan)
+
+        # Adicionar uma linha de dados (exemplo com valores)
+        nova_linha = partes[::-1]
+        df.loc[len(df)] = nova_linha
+
     return df
 
 urls = {
@@ -219,4 +314,13 @@ urls = {
     "2025-04-11" : "https://www.ioerj.com.br/portal/modules/conteudoonline/mostra_edicao.php?session=VFZSQk5WRnJWVEpSVkd0MFVtcG9SVTFETURCTmVrcEdURlZKTlUxNldYUlJlbGw2VDFST1IwMUVUVEZQVkZWNA=="
 }
 
-df = executar_fluxo_um_dia(urls, "2025-04-08")
+datas = list(urls.keys())
+procurar_nos_htmls_salvos(datas)
+
+df = pd.read_csv('csvs/dados_htmls_copiados.csv')
+cria_dfs_agregados(df)
+
+df_hierarquia = categorizar_para_df(df["Lotação"])
+df_hierarquia.to_csv("csvs/agregados/hierarquia.csv", encoding="utf-8", index=False)
+
+# df = executar_fluxo_um_dia(urls, "2025-04-08")
