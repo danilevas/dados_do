@@ -34,7 +34,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.subheader("Os dados a seguir foram extraídos da página oficial do Governo do Estado do Rio de Janeiro com uso de web scraping")
+st.subheader("Os dados a seguir foram extraídos do portal da Imprensa Oficial do Estado do Rio de Janeiro com uso de Web Scraping")
 st.write("---")
 
 df1 = pd.read_csv('csvs/agregados/nomeacoes_por_dia.csv')
