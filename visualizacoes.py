@@ -34,7 +34,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.subheader("Os dados a seguir foram extraídos da página oficial do Governo do Estado do Rio de Janeiro com uso de web scraping.")
+st.subheader("Os dados a seguir foram extraídos da página oficial do Governo do Estado do Rio de Janeiro com uso de web scraping")
 st.write("---")
 
 df1 = pd.read_csv('csvs/agregados/nomeacoes_por_dia.csv')
@@ -42,7 +42,7 @@ df1 = pd.read_csv('csvs/agregados/nomeacoes_por_dia.csv')
 fig1 = px.bar(df1,
              x='Data DO',
              y='Quantidade Nomeações',
-             title="<span style='font-size:24px; font-weight: 600;'>Nomeações do Poder Executivo do Estado do Rio de Janeiro por dia<br>(entre 7 e 11 de Abril de 2025)</span>", 
+             title="<span style='font-size:24px; font-weight: 600;'>Nomeações do Poder Executivo do Estado do Rio de Janeiro por dia</span>", 
              labels={'Data DO': 'Data do Diário Oficial', 'Quantidade Nomeações': 'Quantidade de Nomeações'},
              color='Quantidade Nomeações',
              color_continuous_scale=azuis,
@@ -112,8 +112,16 @@ fig2.update_layout(
     height=600,
     width=800,
     margin={'t': 50, 'b': 50, 'l': 50, 'r': 50},
-    xaxis=dict(showgrid=True),
-    yaxis=dict(showgrid=True),
+    xaxis=dict(
+        showgrid=True,
+        tickmode='array',
+        tickfont=dict(size=18)
+    ),
+    yaxis=dict(
+        showgrid=True,
+        tickmode='array',
+        tickfont=dict(size=18)
+    ),
     autosize=True,
 )
 
@@ -146,14 +154,12 @@ fig3.update_traces(
 fig3.update_layout(
     hoverlabel=dict(font_size=16),
     height=600,
-    width=800,
+    # width=800,
     margin=dict(t=50, b=50, l=50, r=50),
     autosize=True
 )
 
-c1, c2 = st.columns([2, 2])
-with c1:
-    st.plotly_chart(fig3, use_container_width=False)
+st.plotly_chart(fig3, use_container_width=False)
 
 def funcao(valor):
     match = re.search("Secretaria de Estado", valor)
@@ -173,7 +179,7 @@ df4 = df4.sort_values(by='Quantidade Nomeações', ascending=True).tail(10)
 fig4 = px.bar(df4, 
              y='Nível 1',
              x='Quantidade Nomeações', 
-             title="<span style='font-size:24px; font-weight: 600;'>Lotações com mais nomeações</span>", 
+             title="<span style='font-size:24px; font-weight: 600;'>Órgãos Macro com mais nomeações</span>", 
              labels={'Nível 1': 'Nível 1', 'Quantidade Nomeações': 'Quantidade de Nomeações'},
              color='Quantidade Nomeações', 
              color_continuous_scale=azuis,
@@ -197,16 +203,27 @@ fig4.update_layout(
     height=600,
     # width=800,
     margin={'t': 50, 'b': 50, 'l': 50, 'r': 50},
-    xaxis=dict(showgrid=True),
+    xaxis=dict(
+        showgrid=True,
+        tickmode='array',
+        tickfont=dict(size=18)
+    ),
     yaxis=dict(
         showgrid=True,
-        tickvals=df4['Nível 1'],
-        # ticktext=df4['Nível 1'].apply(funcao)
+        tickmode='array',
+        tickfont=dict(size=18)
         ),
     autosize=True,
 )
 
-with c2:
-    st.plotly_chart(fig4, use_container_width=False)
+st.plotly_chart(fig4, use_container_width=False)
+
+st.markdown("""
+    <p style="font-size: 18px;">
+        Aqui define-se órgão macro como o órgão de maior nível citado na parte de lotação da nomeação da pessoa. Por exemplo, quando consta no D.O.:
+        \"NOMEAR FULANO DE TAL para exercer o cargo [...] da Subsecretaria de Gestão de Pessoas, da Secretaria de Estado da Casa Civil\",
+        o órgão macro é a Secretaria de Estado da Casa Civil.
+    </p>
+""", unsafe_allow_html=True)
 
 st.write("---")
