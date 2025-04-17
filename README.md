@@ -36,7 +36,7 @@ Antes de executar o código, certifique-se de ter instalado:
 
 ## Extração dos HTMLs e Estruturação dos Dados
 
-Meu código para essa parte está no arquivo `scraping.py`. Para rodá-lo, execute o seguinte comando:
+O webscraping é feito com Selenium e BeautifulSoup. Como o PDF do site do Estado com os D.O.s é gerado dinamicamente, foi necessário usar o Selenium para rolar para baixo o PDF e esperar que as páginas dele carreguem. Por esse motivo, o código leva alguns poucos minutos para rodar. O código para essa parte está no arquivo `scraping.py`. Para rodá-lo, execute o seguinte comando:
 
    ```bash
    python scraping.py
