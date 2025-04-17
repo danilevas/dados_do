@@ -17,8 +17,8 @@ Antes de executar o código, certifique-se de ter instalado:
 1. Clone este repositório:
 
    ```bash
-   git clone https://github.com/danilevas/desafio-junior-data-scientist.git
-   cd desafio-junior-data-scientist
+   git clone https://github.com/danilevas/dados_do.git
+   cd dados_do
    ```
 
 2. Crie e ative um ambiente virtual (opcional, mas recomendado):
