@@ -2,6 +2,7 @@ import time
 import re
 import pandas as pd
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
 import os
@@ -11,36 +12,63 @@ import numpy as np
 # Configurar e iniciar o driver do Selenium
 def iniciar_driver():
     chrome_options = Options()
+    # Remova o comentário abaixo se quiser headless
     chrome_options.add_argument("--headless")
     driver = webdriver.Chrome(options=chrome_options)
     return driver
 
-# Rola a página até o final para carregar todo o PDF
-def rolar_ate_o_fim(driver):
-    last_height = driver.execute_script("return document.body.scrollHeight")
-    while True:
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(5)  # espera carregar
-        new_height = driver.execute_script("return document.body.scrollHeight")
-        if new_height == last_height:
-            break
-        last_height = new_height
+def rolar_container(driver, data, passo=1367, intervalo_base=0.2):
+    time.sleep(3.6)  # espera geral da página carregar
+    container = driver.find_element(By.ID, "viewerContainer")
+
+    # altura_total = driver.execute_script("return arguments[0].scrollHeight", container)
+    altura_total = passo*10
+    posicao = 0
+
+    print("📜 Rolando o div#viewerContainer...")
+
+    # Vai até a página 10
+    mult=10
+    while posicao < altura_total:
+        driver.execute_script("arguments[0].scrollTo(0, arguments[1]);", container, posicao)
+        time.sleep(intervalo_base*mult)
+        posicao += passo
+        print(f"Posição: {posicao}/{altura_total} (passo = {passo})")
+        # altura_total = driver.execute_script("return arguments[0].scrollHeight", container)
+        mult -= 1
+
+    # Volta pra página 1
+    posicao = 0
+    print(f"Posição: {posicao}/{altura_total} (passo = {passo})")
+
+    # Vai até a página 9
+    altura_total = passo*9
+    mult=10
+    while posicao < altura_total:
+        driver.execute_script("arguments[0].scrollTo(0, arguments[1]);", container, posicao)
+        time.sleep(intervalo_base*mult)
+        posicao += passo
+        print(f"Posição: {posicao}/{altura_total} (passo = {passo})")
+        # altura_total = driver.execute_script("return arguments[0].scrollHeight", container)
+        mult -= 1
+
+    print("✅ Rolagem finalizada")
+
+    # Salva todo o HTML visível após rolagem e o retorna
+    html = driver.page_source
+    with open(f"htmls/diario_oficial_{data}.html", "w", encoding="utf-8") as f:
+        f.write(html)
+    print(f"💾 HTML salvo como htmls/diario_oficial_{data}.html")
+    return html
 
 # Obter o HTML da página
-def obter_html(url):
+def obter_html(url, data):
     driver = iniciar_driver()
     driver.get(url)
     print("\nRolando página para carregar todo conteúdo...")
-    rolar_ate_o_fim(driver)
-    print("Capturando HTML final")
-    html = driver.page_source
+    html = rolar_container(driver, data)
     driver.quit()
     return html
-
-# Salvar o HTML em um arquivo local
-def salvar_html(html, nome_arquivo=f"diario_oficial.html"):
-    with open(nome_arquivo, "w", encoding="utf-8") as f:
-        f.write(html)
 
 # Extrair dados do HTML
 def extrair_dados(data, html):
@@ -50,7 +78,7 @@ def extrair_dados(data, html):
         f.write(texto)
     
     # Encontrar todas as instâncias de "NOMEAR" (ignorando tags)
-    padrao_nomeacao = r'NOMEAR(?:-SE)?(?:\s*<[^>]+>\s*)*(?P<nome>[A-ZÁ-ÚÂ-ÛÃ-ÕÉ-ÍÓ-ÚÇ\s\-]+)'
+    padrao_nomeacao = r'NOMEAR(?:-SE)?(?:\s*<[^>]+>\s*)*(?P<nome>[A-ZÁ-ÚÂ-ÛÃ-ÕÉ-ÍÓ-ÚÇ\s\-]+)' # com validade a contar de
     nomeacoes = []
     cargos = []
     simbolos = []
@@ -207,10 +235,8 @@ def executar_fluxo_completo(urls):
 
     # Iterando pelos dias e os URLs com seus DOs
     for data, url in urls.items():
-        print(f"\n > Obtendo html do DO do dia {data}")
-        html = obter_html(url)
-        print(f"Salvando html do DO do dia {data}")
-        salvar_html(html, nome_arquivo=f"htmls/diario_oficial_{data}.html")
+        print(f"\n > Obtendo e salvando html do DO do dia {data}")
+        html = obter_html(url, data)
         print(f"Extraindo dados do DO do dia {data}")
         nomes, cargos, simbolos, lotacoes, hierarquia = extrair_dados(data, html)
         print(f"Salvando o CSV do DO do dia {data}")
@@ -225,10 +251,8 @@ def executar_fluxo_um_dia(urls, data):
     if os.path.isfile(f"csvs/dados_teste_{data}.csv"):
         os.remove(f"csvs/dados_teste_{data}.csv")
 
-    print(f"\n > Obtendo html do DO do dia {data}")
-    html = obter_html(urls[data])
-    print(f"Salvando html do DO do dia {data}")
-    salvar_html(html, nome_arquivo=f"htmls/diario_oficial_{data}_teste.html")
+    print(f"\n > Obtendo e salvando html do DO do dia {data}")
+    html = obter_html(urls[data], data)
     print(f"Extraindo dados do DO do dia {data}")
     nomes, cargos, simbolos, lotacoes, hierarquia = extrair_dados(data, html)
     print(f"Salvando o CSV do DO do dia {data}")
@@ -246,11 +270,10 @@ def procurar_no_html_salvo(data):
     salvar_hierarquia(hierarquia)
     return df
 
-# Função principal (executa tudo)
 def procurar_nos_htmls_salvos(datas):
     # Deleta o arquivo com dados, se existir, para pegarmos dados novos
-    if os.path.isfile("csvs/dados_htmls_copiados.csv"):
-        os.remove("csvs/dados_htmls_copiados.csv")
+    if os.path.isfile("csvs/dados_htmls_testando.csv"):
+        os.remove("csvs/dados_htmls_testando.csv")
 
     # Iterando pelos dias e os arquivos com os HTMLs dos DOs
     for data in datas:
@@ -259,7 +282,7 @@ def procurar_nos_htmls_salvos(datas):
         print(f"Extraindo dados do DO do dia {data}")
         nomes, cargos, simbolos, lotacoes, hierarquia = extrair_dados(data, html_salvo)
         print(f"Salvando o CSV do DO do dia {data}")
-        df = salvar_em_csv(data, nomes, cargos, simbolos, lotacoes, nome_arquivo=f"csvs/dados_htmls_copiados.csv")
+        df = salvar_em_csv(data, nomes, cargos, simbolos, lotacoes, nome_arquivo=f"csvs/dados_htmls_testando.csv")
         salvar_hierarquia(hierarquia)
     
     return df
@@ -280,7 +303,7 @@ def cria_dfs_agregados(df):
     df_nomeacoes_por_lotacao = df_nomeacoes_por_lotacao.sort_values(by='Quantidade Nomeações', ascending=False)
     df_nomeacoes_por_lotacao.to_csv("csvs/agregados/nomeacoes_por_lotacao.csv", encoding="utf-8", index=False)
 
-def categorizar_para_df(lista):
+def cria_df_hierarquia(lista):
     # Vê qual o maior número de subdivisões
     max_n_virgulas = 0
     for item in lista:
@@ -314,13 +337,14 @@ urls = {
     "2025-04-11" : "https://www.ioerj.com.br/portal/modules/conteudoonline/mostra_edicao.php?session=VFZSQk5WRnJWVEpSVkd0MFVtcG9SVTFETURCTmVrcEdURlZKTlUxNldYUlJlbGw2VDFST1IwMUVUVEZQVkZWNA=="
 }
 
-datas = list(urls.keys())
-procurar_nos_htmls_salvos(datas)
+# datas = list(urls.keys())
+# procurar_nos_htmls_salvos(datas)
 
-df = pd.read_csv('csvs/dados_htmls_copiados.csv')
-cria_dfs_agregados(df)
+# df = pd.read_csv('csvs/dados_htmls_copiados.csv')
+# cria_dfs_agregados(df)
 
-df_hierarquia = categorizar_para_df(df["Lotação"])
-df_hierarquia.to_csv("csvs/agregados/hierarquia.csv", encoding="utf-8", index=False)
+# df_hierarquia = cria_df_hierarquia(df["Lotação"])
+# df_hierarquia.to_csv("csvs/agregados/hierarquia.csv", encoding="utf-8", index=False)
 
 # df = executar_fluxo_um_dia(urls, "2025-04-08")
+# executar_fluxo_completo(urls)
