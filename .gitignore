@@ -3,3 +3,6 @@ env/
 
 # Cache
 /__pycache__
+
+# lib
+lib/
