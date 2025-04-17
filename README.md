@@ -54,6 +54,8 @@ As visualizações foram feitas com Streamlit e Plotly. Para rodar localmente o 
    streamlit run visualizacoes.py
    ```
 
+Para checar as visualizações sem ter que executar código, simplesmente confira o link [https://dados-do-estado-rj.streamlit.app/](https://dados-do-estado-rj.streamlit.app/)
+
 ---
 
 **Daniel Adler Levacov**
